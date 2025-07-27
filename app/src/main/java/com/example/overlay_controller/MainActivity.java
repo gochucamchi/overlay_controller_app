@@ -1,120 +1,112 @@
-package com.example.overlay_controller;
+// MainActivity.java
+package com.example.overlay_controller; // 본인의 패키지 이름
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable; // Nullable import 추가
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 1;
+    private static final int REQUEST_OVERLAY_PERMISSION = 1001;
+
+    private final ActivityResultLauncher<String> requestNotificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    Toast.makeText(this, "알림 권한이 허용되었습니다.", Toast.LENGTH_SHORT).show();
+                    startOverlayService();
+                } else {
+                    Toast.makeText(this, "알림 권한이 거부되었습니다. 일부 기능이 제한될 수 있습니다.", Toast.LENGTH_LONG).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Button startOverlayButton = findViewById(R.id.start_overlay_button);
-        Button stopOverlayButton = findViewById(R.id.stop_overlay_button);
-
-        checkOverlayPermission(); // 앱 시작 시 권한 확인
-
-        startOverlayButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (Settings.canDrawOverlays(MainActivity.this)) {
-                        startOverlayService();
-                    } else {
-                        requestOverlayPermission();
-                        Toast.makeText(MainActivity.this, "오버레이 권한이 필요합니다.", Toast.LENGTH_SHORT).show();
-                    }
+        // 수정된 버튼 ID 사용
+        Button startButton = findViewById(R.id.start_overlay_button); // 여기 수정
+        startButton.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!Settings.canDrawOverlays(this)) {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivityForResult(intent, REQUEST_OVERLAY_PERMISSION);
                 } else {
-                    // M 미만 버전은 매니페스트 권한으로 충분 (이론상)
-                    startOverlayService();
+                    checkAndRequestNotificationPermission();
                 }
+            } else {
+                startOverlayService();
             }
         });
 
-        stopOverlayButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                stopOverlayService();
-            }
+        // 수정된 버튼 ID 사용
+        Button stopButton = findViewById(R.id.stop_overlay_button); // 여기 수정
+        stopButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, OverlayService.class);
+            stopService(intent);
+            Toast.makeText(this, "오버레이 컨트롤러 중지", Toast.LENGTH_SHORT).show();
         });
+    }
+
+    private void checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED) {
+                startOverlayService();
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                Toast.makeText(this, "알림을 받으려면 권한이 필요합니다.", Toast.LENGTH_LONG).show();
+                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            } else {
+                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        } else {
+            startOverlayService();
+        }
     }
 
     private void startOverlayService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            // 다시 한 번 권한 확인 (사용자가 설정을 변경했을 수도 있음)
-            Toast.makeText(this, "오버레이 권한이 없습니다. 설정에서 허용해주세요.", Toast.LENGTH_LONG).show();
-            requestOverlayPermission();
+            Toast.makeText(this, "다른 앱 위에 표시 권한이 필요합니다.", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivityForResult(intent, REQUEST_OVERLAY_PERMISSION);
             return;
         }
-        // 서비스가 이미 실행 중인지 확인 (선택 사항, 중복 실행 방지)
-        // if (isServiceRunning(OverlayService.class)) {
-        // Toast.makeText(this, "오버레이 서비스가 이미 실행 중입니다.", Toast.LENGTH_SHORT).show();
-        // return;
-        // }
+
         Intent intent = new Intent(this, OverlayService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent); // Android Oreo 이상에서는 Foreground Service로 시작해야 할 수 있음
+            startForegroundService(intent);
         } else {
             startService(intent);
         }
-        Toast.makeText(this, "오버레이 서비스 시작", Toast.LENGTH_SHORT).show();
-    }
-
-    private void stopOverlayService() {
-        Intent intent = new Intent(this, OverlayService.class);
-        stopService(intent);
-        Toast.makeText(this, "오버레이 서비스 중지", Toast.LENGTH_SHORT).show();
-    }
-
-
-    private void checkOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!Settings.canDrawOverlays(this)) {
-                requestOverlayPermission();
-            }
-        }
-    }
-
-    private void requestOverlayPermission() {
-        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getPackageName()));
-        startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE);
+        Toast.makeText(this, "오버레이 컨트롤러 시작", Toast.LENGTH_SHORT).show();
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE) {
+        if (requestCode == REQUEST_OVERLAY_PERMISSION) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (Settings.canDrawOverlays(this)) {
-                    Toast.makeText(this, "오버레이 권한이 허용되었습니다. 시작 버튼을 눌러주세요.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "다른 앱 위에 표시 권한이 허용되었습니다.", Toast.LENGTH_SHORT).show();
+                    checkAndRequestNotificationPermission();
                 } else {
-                    Toast.makeText(this, "오버레이 권한이 거부되었습니다. 앱 사용을 위해 권한이 필요합니다.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "다른 앱 위에 표시 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show();
                 }
             }
         }
     }
-
-    // 선택 사항: 서비스 실행 여부 확인 메소드
-        /*
-        private boolean isServiceRunning(Class<?> serviceClass) {
-            ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-                if (serviceClass.getName().equals(service.service.getClassName())) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        */
 }

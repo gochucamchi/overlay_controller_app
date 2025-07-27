@@ -32,7 +32,7 @@ android {
 }
 
 dependencies {
-
+    implementation("com.squareup.okhttp3:okhttp:4.12.0") // 최신 버전은 여기서 확인: https://square.github.io/okhttp
     implementation(libs.appcompat)
     implementation(libs.material)
     testImplementation(libs.junit)
