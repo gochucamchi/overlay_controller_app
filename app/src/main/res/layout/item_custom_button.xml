@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textView_button_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:text="버튼 레이블" />
+
+        <TextView
+            android:id="@+id/textView_button_key_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="키 이름: KEY_A" />
+
+        <TextView
+            android:id="@+id/textView_button_properties"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="위치: (0.5, 0.5), 크기: (0.1, 0.1)" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/button_edit_config"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@android:drawable/ic_menu_edit"
+        android:contentDescription="수정"
+        android:layout_gravity="center_vertical"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+    <ImageButton
+        android:id="@+id/button_delete_config"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@android:drawable/ic_menu_delete"
+        android:contentDescription="삭제"
+        android:layout_gravity="center_vertical"
+        android:layout_marginLeft="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+</LinearLayout>
