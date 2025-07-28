@@ -1,8 +1,7 @@
 // 1. 필요한 라이브러리들을 불러옵니다.
 const http = require('http');
 const express = require('express');
-const { Server } = require('socket.io'); // socket.io 라이브러리를 가져옵니다.
-const path = require('path');
+const { Server } = require('socket.io');
 
 // 2. Express 앱, HTTP 서버, Socket.IO 인스턴스를 생성합니다.
 const app = express();
@@ -41,7 +40,6 @@ io.on('connection', (socket) => {
             pcClients[socket.id] = socket;
             console.log(`[등록] PC 클라이언트: ${socket.id}`);
         }
-        // 안드로이드 앱은 별도의 register 과정이 없으므로 여기서 처리하지 않음
     });
 
     // 안드로이드 앱에서 보낸 메시지 처리 ('message' 이벤트 또는 기본 이벤트)
@@ -114,4 +112,3 @@ server.listen(PORT, () => {
     console.log(`🚀 컨트롤러 서버가 포트 ${PORT}에서 실행 중입니다.`);
     console.log(`안드로이드 앱과 PC 클라이언트에서 접속을 기다립니다...`);
 });
-
