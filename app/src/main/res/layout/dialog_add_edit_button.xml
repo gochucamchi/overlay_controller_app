@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <EditText
+        android:id="@+id/editText_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="버튼 레이블 (예: 점프)"
+        android:inputType="text"/>
+
+    <EditText
+        android:id="@+id/editText_key_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="전송할 키 이름 (예: SPACE_KEY)"
+        android:inputType="textCapCharacters"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="위치 (비율, 0.0 ~ 1.0)"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:id="@+id/editText_x_pos"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="X (가로)"
+            android:inputType="numberDecimal"/>
+        <EditText
+            android:id="@+id/editText_y_pos"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:hint="Y (세로)"
+            android:inputType="numberDecimal"/>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="크기 (비율, 0.0 ~ 1.0, 0보다 커야 함)"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <EditText
+            android:id="@+id/editText_width"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="너비"
+            android:inputType="numberDecimal"/>
+        <EditText
+            android:id="@+id/editText_height"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:hint="높이"
+            android:inputType="numberDecimal"/>
+    </LinearLayout>
+</LinearLayout>
