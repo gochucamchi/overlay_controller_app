@@ -7,14 +7,14 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { // 안드로이드 앱, PC 클라이언트 등 어디서든 접속할 수 있도록 CORS 허용
+    cors: {
         origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
 // 3. 서버 포트를 설정합니다.
-const PORT = 8079; // 안드로이드 앱에 설정된 포트와 동일하게 맞췄습니다.
+const PORT = 8079;
 
 // 4. 클라이언트들을 관리할 객체
 const controllerClients = {}; // 제어하는 클라이언트 (안드로이드 앱)
@@ -26,59 +26,90 @@ const keyMapping = {
     "ARROW_DOWN": "down",
     "ARROW_LEFT": "left",
     "ARROW_RIGHT": "right",
-    "ACTION_A": "a" // 예시: 안드로이드의 'ACTION_A'를 PC의 'a' 키로 매핑
-    // 필요한 다른 키들을 여기에 추가하세요. (예: "ACTION_B": "b")
+    "ACTION_A": "a"
+    // 필요한 다른 키들을 여기에 추가하세요.
 };
 
 // 6. Socket.IO 연결 처리
 io.on('connection', (socket) => {
     console.log(`[연결] 새로운 클라이언트 접속: ${socket.id}`);
 
-    // PC 클라이언트를 등록하는 부분 (기존 코드와 유사)
-    socket.on('register', (clientType) => {
-        if (clientType === 'pc' || clientType === 'exe') { // 'pc' 또는 'exe' 타입으로 등록
+    socket.on('register', (data) => { // data는 이제 객체일 수 있음
+        let clientType = "";
+        if (typeof data === 'string') { // 이전 Python 클라이언트 호환
+            clientType = data;
+        } else if (typeof data === 'object' && data && data.type) { // 안드로이드 JSON 형식
+            clientType = data.type;
+        }
+
+        if (clientType === 'pc' || clientType === 'exe') {
             pcClients[socket.id] = socket;
-            console.log(`[등록] PC 클라이언트: ${socket.id}`);
+            console.log(`[등록] PC 클라이언트 (${clientType}): ${socket.id}`);
+        } else if (clientType === 'android_controller') {
+            controllerClients[socket.id] = socket;
+            console.log(`[등록] 안드로이드 컨트롤러: ${socket.id}`);
+        } else {
+            console.log(`[등록 시도] 알 수 없는 클라이언트 타입 (${clientType}): ${socket.id}`);
         }
     });
 
-    // 안드로이드 앱에서 보낸 메시지 처리 ('message' 이벤트 또는 기본 이벤트)
-    // 안드로이드의 OkHttp WebSocket은 'message'라는 기본 이벤트로 데이터를 보냅니다.
-    socket.on('message', (data) => {
-        // 이 소켓이 PC 클라이언트로 등록되지 않았다면 컨트롤러(안드로이드)로 간주
-        if (!pcClients[socket.id]) {
-            if (!controllerClients[socket.id]) {
-                controllerClients[socket.id] = socket;
-                console.log(`[등록] 안드로이드 컨트롤러: ${socket.id}`);
+    // 안드로이드 앱에서 'androidControl' 이벤트로 JSON 데이터를 보낼 경우
+    socket.on('androidControl', (commandData) => { // commandData는 JSON 객체여야 함
+        if (controllerClients[socket.id]) { // 등록된 컨트롤러가 보낸 메시지만 처리
+            console.log(`[수신] 안드로이드 -> 서버 (${socket.id}):`, commandData);
+
+            try {
+                // commandData가 이미 객체이므로 JSON.parse 불필요
+                if (commandData && commandData.type === 'INPUT' && commandData.key) {
+                    const keyFromAndroid = commandData.key;
+                    const keyForPC = keyMapping[keyFromAndroid] || keyFromAndroid.toLowerCase();
+                    let pcAction = "";
+
+                    if (commandData.event === 'KEY_DOWN') {
+                        pcAction = "keyDown";
+                    } else if (commandData.event === 'KEY_UP') {
+                        pcAction = "keyUp";
+                    } else if (commandData.event === 'KEY_PRESS') { // KEY_PRESS는 keyDown 후 자동 keyUp
+                        pcAction = "keyDown"; // 먼저 keyDown
+                    } else {
+                        console.log(`[경고] 알 수 없는 입력 이벤트: ${commandData.event}`);
+                        return;
+                    }
+
+                    const pcCommand = {
+                        action: pcAction,
+                        key: keyForPC,
+                        mode: commandData.mode || "game" // 안드로이드에서 mode를 보낼 수도 있음
+                    };
+
+                    forwardToPC('control', pcCommand);
+
+                    // KEY_PRESS의 경우, 짧은 시간 후 자동으로 keyUp (안드로이드에서 KEY_DOWN/KEY_UP을 명확히 보내면 이 로직 불필요)
+                    if (commandData.event === 'KEY_PRESS' && pcAction === "keyDown") {
+                        setTimeout(() => {
+                            const upCommand = { ...pcCommand, action: "keyUp" };
+                            forwardToPC('control', upCommand);
+                            console.log(`[자동 송신] KEY_PRESS에 대한 keyUp -> PC: ${JSON.stringify(upCommand)}`);
+                        }, 50); // 50ms 후에 keyUp 실행
+                    }
+
+                } else if (commandData && commandData.type === 'MOUSE') { // 예시: 마우스 이벤트 처리
+                    // 필요한 마우스 제어 로직 추가 (Python 클라이언트의 handle_input 참조)
+                    // 예: commandData.event === 'MOUSE_MOVE', commandData.x, commandData.y 등
+                    // forwardToPC('control', processedMouseCommand);
+                    console.log(`[수신] 안드로이드 마우스 이벤트:`, commandData);
+                } else {
+                    console.log(`[경고] 처리할 수 없는 안드로이드 제어 데이터 형식:`, commandData);
+                }
+            } catch (e) {
+                console.error(`[오류] 안드로이드 제어 데이터 처리 중 예외 발생 (${socket.id}):`, e);
+                console.error("수신된 데이터:", commandData);
             }
-            console.log(`[수신] 안드로이드 -> 서버: ${data}`);
-
-            // 수신한 데이터를 파싱 (예: "INPUT:KEY_PRESS:ARROW_UP")
-            const parts = data.toString().split(':');
-            if (parts.length === 3 && parts[0] === 'INPUT' && parts[1] === 'KEY_PRESS') {
-                const keyFromAndroid = parts[2];
-                const keyForPC = keyMapping[keyFromAndroid] || keyFromAndroid.toLowerCase();
-
-                // PC 클라이언트가 이해하는 JSON 형식으로 변환
-                const command = {
-                    action: "keyDown", // 안드로이드에서는 버튼 누르는 것만 있으므로 keyDown/keyUp을 함께 보낼 수 있습니다.
-                    key: keyForPC,
-                    mode: "game" // 기본 모드를 'game'으로 설정 (pydirectinput 사용)
-                };
-
-                // 모든 연결된 PC 클라이언트에게 변환된 데이터 전송
-                forwardToPC('control', command);
-
-                // 짧은 시간 후 자동으로 keyUp 이벤트를 보내 버튼을 뗀 효과를 줌
-                setTimeout(() => {
-                    const upCommand = { ...command, action: "keyUp" };
-                    forwardToPC('control', upCommand);
-                }, 50); // 50ms 후에 keyUp 실행
-            }
+        } else {
+            console.log(`[경고] 미등록 클라이언트(${socket.id})로부터 'androidControl' 이벤트 수신:`, commandData);
         }
     });
 
-    // 연결 종료 시 각 클라이언트 목록에서 제거
     socket.on('disconnect', () => {
         if (controllerClients[socket.id]) {
             delete controllerClients[socket.id];
@@ -86,6 +117,8 @@ io.on('connection', (socket) => {
         } else if (pcClients[socket.id]) {
             delete pcClients[socket.id];
             console.log(`[연결 종료] PC 클라이언트: ${socket.id}`);
+        } else {
+            console.log(`[연결 종료] 미등록 클라이언트: ${socket.id}`);
         }
     });
 });
@@ -97,13 +130,12 @@ io.on('connection', (socket) => {
  */
 function forwardToPC(eventName, data) {
     if (Object.keys(pcClients).length > 0) {
-        console.log(`[송신] 서버 -> PC: ${JSON.stringify(data)}`);
-        // 연결된 모든 PC 클라이언트에게 데이터를 보냄
+        console.log(`[송신] 서버 -> PC (${eventName}): ${JSON.stringify(data)}`);
         for (const id in pcClients) {
             pcClients[id].emit(eventName, data);
         }
     } else {
-        console.log("[경고] 제어 신호를 전달할 PC 클라이언트가 연결되어 있지 않습니다.");
+        console.log(`[경고] 제어 신호를 전달할 PC 클라이언트가 연결되어 있지 않습니다.`);
     }
 }
 
