@@ -29,7 +29,7 @@
 
         <activity
             android:name=".KeyCaptureActivity"
-            android:theme="@style/Theme.Transparent"
+            android:theme="@style/Theme.Dimmed"
             android:exported="false" />
 
         <activity

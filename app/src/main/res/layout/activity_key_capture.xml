@@ -1,14 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="1dp"
-    android:layout_height="1dp"
-    android:orientation="vertical">
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp"
+    android:layout_gravity="center"
+    android:background="#DD2C2C2C">
 
-    <EditText
-        android:id="@+id/editText_key_capture"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:inputType="text"
-        android:imeOptions="actionDone" />
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp">
+        <TextView
+            android:id="@+id/tv_selected_key"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="#555555"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="18sp" />
+        <Button
+            android:id="@+id/btn_confirm"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="확인" />
+    </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/keyboard_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_esc" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Esc"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_f1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="F1"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_f2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="F2"/>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2"/>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_q" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Q"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_w" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="W"/>
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_ctrl" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.5" android:text="Ctrl"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_alt" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1.2" android:text="Alt"/>
+            <Button style="@style/Widget.AppCompat.Button.Small" android:id="@+id/key_space" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="5" android:text="Space"/>
+        </LinearLayout>
+
+    </LinearLayout>
 </LinearLayout>

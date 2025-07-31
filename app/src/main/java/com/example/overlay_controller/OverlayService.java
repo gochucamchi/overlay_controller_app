@@ -3,10 +3,8 @@ package com.example.overlay_controller;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -17,7 +15,6 @@ import android.view.WindowManager;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +31,9 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
     public static final String ACTION_TOGGLE_VISIBILITY = "com.example.overlay_controller.ACTION_TOGGLE_VISIBILITY";
     public static final String ACTION_STOP_SERVICE = "com.example.overlay_controller.ACTION_STOP_SERVICE";
 
-    private Handler mainHandler;
+    public static KeyCaptureActivity.KeyCaptureListener keyCaptureListener;
 
+    private Handler mainHandler;
     private WindowManager windowManager;
     private LayoutInflater layoutInflater;
     private OverlayViewManager overlayViewManager;
@@ -45,7 +43,6 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
     private ButtonConfigManager buttonConfigManager;
     private List<CustomButtonConfig> currentConfigs;
     private EditMode currentEditMode = EditMode.NORMAL;
-    private BroadcastReceiver keyCaptureReceiver;
 
     @Nullable
     @Override
@@ -60,12 +57,6 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         layoutInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-        if (windowManager == null || layoutInflater == null) {
-            Log.e(TAG, "WindowManager 또는 LayoutInflater 초기화 실패. 서비스 종료.");
-            stopSelf();
-            return;
-        }
-
         buttonConfigManager = new ButtonConfigManager(getApplicationContext());
         currentConfigs = buttonConfigManager.getAllButtonConfigs();
 
@@ -79,46 +70,11 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         notificationCreator = new NotificationCreator(this, NOTIFICATION_CHANNEL_ID);
         notificationCreator.createNotificationChannel(NOTIFICATION_CHANNEL_NAME, NOTIFICATION_CHANNEL_DESC);
 
-        setupKeyCaptureReceiver();
-
         overlayViewManager.showOverlay();
         loadAndDisplayCustomButtons();
         startServiceNotification();
         if (socketIOManager != null) {
             socketIOManager.connect(SERVER_URL);
-        }
-    }
-
-    private void setupKeyCaptureReceiver() {
-        keyCaptureReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (intent != null && KeyCaptureActivity.ACTION_KEY_CAPTURED.equals(intent.getAction())) {
-                    String capturedKey = intent.getStringExtra(KeyCaptureActivity.EXTRA_CAPTURED_KEY);
-                    String buttonLabel = intent.getStringExtra(KeyCaptureActivity.EXTRA_BUTTON_LABEL);
-
-                    if (capturedKey != null && buttonLabel != null) {
-                        updateButtonKey(buttonLabel, capturedKey);
-                    }
-                }
-            }
-        };
-        IntentFilter filter = new IntentFilter(KeyCaptureActivity.ACTION_KEY_CAPTURED);
-        ContextCompat.registerReceiver(this, keyCaptureReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
-    }
-
-    private void updateButtonKey(String buttonLabel, String newKey) {
-        if (currentConfigs == null || buttonConfigManager == null) return;
-        for (int i = 0; i < currentConfigs.size(); i++) {
-            CustomButtonConfig config = currentConfigs.get(i);
-            if (config.getLabel().equals(buttonLabel)) {
-                config.setLabel(newKey);
-                config.setKeyName(newKey);
-                buttonConfigManager.updateButtonConfig(i, config);
-                Log.d(TAG, buttonLabel + "의 라벨과 키가 '" + newKey + "' (으)로 변경 및 저장되었습니다.");
-                loadAndDisplayCustomButtons();
-                return;
-            }
         }
     }
 
@@ -196,7 +152,6 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
     @Override
     public void onEditModeChanged(EditMode newMode) {
         this.currentEditMode = newMode;
-        Log.d(TAG, "Edit mode changed to: " + newMode.name());
         if (overlayViewManager != null) {
             overlayViewManager.updateButtonVisuals(newMode);
         }
@@ -248,6 +203,21 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
 
     @Override
     public void onKeyAssignRequested(CustomButtonConfig config) {
+        keyCaptureListener = (originalButtonLabel, newKey) -> {
+            if (currentConfigs == null || buttonConfigManager == null) return;
+            for (int i = 0; i < currentConfigs.size(); i++) {
+                CustomButtonConfig currentConfig = currentConfigs.get(i);
+                if (currentConfig.getLabel().equals(originalButtonLabel)) {
+                    currentConfig.setLabel(newKey);
+                    currentConfig.setKeyName(newKey);
+                    buttonConfigManager.updateButtonConfig(i, currentConfig);
+                    Log.d(TAG, originalButtonLabel + "의 라벨과 키가 '" + newKey + "' (으)로 변경 및 저장되었습니다.");
+                    loadAndDisplayCustomButtons();
+                    return;
+                }
+            }
+        };
+
         Intent intent = new Intent(this, KeyCaptureActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.putExtra(KeyCaptureActivity.EXTRA_BUTTON_LABEL, config.getLabel());
@@ -275,9 +245,7 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
     @Override
     public void onDestroy() {
         super.onDestroy();
-        if (keyCaptureReceiver != null) {
-            unregisterReceiver(keyCaptureReceiver);
-        }
+        keyCaptureListener = null;
         if (overlayViewManager != null) {
             overlayViewManager.cleanup();
         }
