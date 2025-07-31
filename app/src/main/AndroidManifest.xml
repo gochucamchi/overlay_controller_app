@@ -28,6 +28,11 @@
         </service>
 
         <activity
+            android:name=".KeyCaptureActivity"
+            android:theme="@style/Theme.Transparent"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true" >
             <intent-filter>
