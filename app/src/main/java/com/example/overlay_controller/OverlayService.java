@@ -50,6 +50,8 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         return null;
     }
 
+    // onKeyAssignRequested 메소드가 여기에 중복으로 있었을 것입니다. 삭제되었습니다.
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -201,8 +203,12 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         loadAndDisplayCustomButtons();
     }
 
+    // onKeyAssignRequested 메소드를 하나로 합칩니다.
     @Override
     public void onKeyAssignRequested(CustomButtonConfig config) {
+        // 새로운 액티비티를 띄우기 전에, 기존에 열려있던 액티비티를 먼저 닫습니다.
+        KeyCaptureActivity.finishActivity();
+
         keyCaptureListener = (originalButtonLabel, newKey) -> {
             if (currentConfigs == null || buttonConfigManager == null) return;
             for (int i = 0; i < currentConfigs.size(); i++) {
@@ -211,7 +217,6 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
                     currentConfig.setLabel(newKey);
                     currentConfig.setKeyName(newKey);
                     buttonConfigManager.updateButtonConfig(i, currentConfig);
-                    Log.d(TAG, originalButtonLabel + "의 라벨과 키가 '" + newKey + "' (으)로 변경 및 저장되었습니다.");
                     loadAndDisplayCustomButtons();
                     return;
                 }
@@ -219,7 +224,10 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         };
 
         Intent intent = new Intent(this, KeyCaptureActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+                Intent.FLAG_ACTIVITY_MULTIPLE_TASK |
+                Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+
         intent.putExtra(KeyCaptureActivity.EXTRA_BUTTON_LABEL, config.getLabel());
         startActivity(intent);
     }

@@ -148,10 +148,33 @@ public class OverlayViewManager {
             final int[] initialButtonSize = new int[2];
             final boolean[] isResizing = {false};
 
+            // <<<< 멀티터치를 위해 OnTouchListener 로직을 완전히 새로 구성합니다 >>>>
             customButton.setOnTouchListener((v, event) -> {
                 if (overlayInteractionListener == null) return false;
                 EditMode currentMode = overlayInteractionListener.getCurrentEditMode();
 
+                // NORMAL 모드일 때는 멀티터치를 지원하는 간단한 로직을 사용합니다.
+                if (currentMode == EditMode.NORMAL) {
+                    if (keyInputListener == null) return false;
+
+                    // getAction() 대신 getActionMasked()를 사용합니다.
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                        case MotionEvent.ACTION_POINTER_DOWN:
+                            v.setAlpha(0.5f); // 눌림 효과
+                            keyInputListener.onKeyEvent(config.getKeyName(), event);
+                            break;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_POINTER_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            v.setAlpha(1.0f); // 복구 효과
+                            keyInputListener.onKeyEvent(config.getKeyName(), event);
+                            break;
+                    }
+                    return true; // NORMAL 모드에서는 항상 이벤트를 소비
+                }
+
+                // 편집 모드들은 한 번에 하나만 조작하므로 기존 로직을 유지합니다.
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         isResizing[0] = false;
@@ -168,10 +191,6 @@ public class OverlayViewManager {
                             initialTouchPos[1] = event.getRawY();
                             initialButtonPos[0] = buttonParams.x;
                             initialButtonPos[1] = buttonParams.y;
-                        } else if (currentMode == EditMode.NORMAL && keyInputListener != null) {
-                            // <<<< 시각적 피드백 추가 (눌렀을 때) >>>>
-                            v.setAlpha(0.5f);
-                            keyInputListener.onKeyEvent(config.getKeyName(), event);
                         }
                         return true;
 
@@ -190,12 +209,6 @@ public class OverlayViewManager {
                         return true;
 
                     case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL: // <<<< 터치가 취소되었을 때도 원래대로 복구
-                        if (currentMode == EditMode.NORMAL) {
-                            // <<<< 시각적 피드백 추가 (손을 뗐을 때) >>>>
-                            v.setAlpha(1.0f);
-                        }
-
                         if (currentMode == EditMode.ASSIGN_KEY) {
                             overlayInteractionListener.onKeyAssignRequested(config);
                             return true;
@@ -214,8 +227,6 @@ public class OverlayViewManager {
                             config.setXPositionPercent((float) buttonParams.x / screenWidth);
                             config.setYPositionPercent((float) buttonParams.y / screenHeight);
                             overlayInteractionListener.onButtonUpdated(config);
-                        } else if (currentMode == EditMode.NORMAL && keyInputListener != null) {
-                            keyInputListener.onKeyEvent(config.getKeyName(), event);
                         }
                         isResizing[0] = false;
                         return true;
