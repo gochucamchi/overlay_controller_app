@@ -1,4 +1,4 @@
-// 1. 필요한 라이브러리들을 불러옵니다.
+
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -26,8 +26,12 @@ const keyMapping = {
     "ARROW_DOWN": "down",
     "ARROW_LEFT": "left",
     "ARROW_RIGHT": "right",
-    "ACTION_A": "a"
+    "ACTION_A": "a",
     // 필요한 다른 키들을 여기에 추가하세요.
+    "↑": "up",
+    "↓": "down",
+    "←": "left",
+    "→": "right"
 };
 
 // 6. Socket.IO 연결 처리
