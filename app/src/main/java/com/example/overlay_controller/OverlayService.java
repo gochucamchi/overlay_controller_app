@@ -1,3 +1,4 @@
+// /com/example/overlay_controller/OverlayService.java
 package com.example.overlay_controller;
 
 import android.app.Notification;
@@ -10,7 +11,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -18,24 +18,21 @@ import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-public class OverlayService extends Service implements SocketIOManager.ConnectionListener, OverlayViewManager.OverlayInteractionListener {
+public class OverlayService extends Service implements OverlayViewManager.OverlayInteractionListener, SocketIOManager.ConnectionListener {
 
     private static final String TAG = "OverlayService";
     private static final String NOTIFICATION_CHANNEL_ID = "OverlayServiceChannel";
-    private static final String NOTIFICATION_CHANNEL_NAME = "가상 컨트롤러 서비스 채널";
-    private static final String NOTIFICATION_CHANNEL_DESC = "가상 컨트롤러 서비스 알림 채널입니다.";
-    private static final int NOTIFICATION_ID = 1;
-    private static final String SERVER_URL = "http://gocam.p-e.kr:8079";
-
-    public static final String ACTION_TOGGLE_VISIBILITY = "com.example.overlay_controller.ACTION_TOGGLE_VISIBILITY";
-    public static final String ACTION_STOP_SERVICE = "com.example.overlay_controller.ACTION_STOP_SERVICE";
+    public static final String ACTION_START = "com.example.overlay_controller.ACTION_START";
+    public static final String ACTION_STOP = "com.example.overlay_controller.ACTION_STOP";
+    public static final String ACTION_SHOW = "com.example.overlay_controller.ACTION_SHOW";
+    public static final String ACTION_HIDE = "com.example.overlay_controller.ACTION_HIDE";
 
     public static KeyCaptureActivity.KeyCaptureListener keyCaptureListener;
 
     private Handler mainHandler;
     private WindowManager windowManager;
-    private LayoutInflater layoutInflater;
     private OverlayViewManager overlayViewManager;
     private KeyInputHandler keyInputHandler;
     private NotificationCreator notificationCreator;
@@ -43,120 +40,108 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
     private ButtonConfigManager buttonConfigManager;
     private List<CustomButtonConfig> currentConfigs;
     private EditMode currentEditMode = EditMode.NORMAL;
+    private boolean isOverlayShown = false;
 
     @Nullable
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-
-    // onKeyAssignRequested 메소드가 여기에 중복으로 있었을 것입니다. 삭제되었습니다.
+    public IBinder onBind(Intent intent) { return null; }
 
     @Override
     public void onCreate() {
         super.onCreate();
         mainHandler = new Handler(Looper.getMainLooper());
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-        layoutInflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 
-        buttonConfigManager = new ButtonConfigManager(getApplicationContext());
-        currentConfigs = buttonConfigManager.getAllButtonConfigs();
-
+        buttonConfigManager = new ButtonConfigManager(this);
         socketIOManager = new SocketIOManager();
         socketIOManager.setConnectionListener(this);
-
         keyInputHandler = new KeyInputHandler(socketIOManager);
-
-        overlayViewManager = new OverlayViewManager(this, windowManager, layoutInflater, keyInputHandler, this);
-
+        overlayViewManager = new OverlayViewManager(this, windowManager, keyInputHandler, this);
         notificationCreator = new NotificationCreator(this, NOTIFICATION_CHANNEL_ID);
-        notificationCreator.createNotificationChannel(NOTIFICATION_CHANNEL_NAME, NOTIFICATION_CHANNEL_DESC);
-
-        overlayViewManager.showOverlay();
-        loadAndDisplayCustomButtons();
-        startServiceNotification();
-        if (socketIOManager != null) {
-            socketIOManager.connect(SERVER_URL);
-        }
-    }
-
-    private void loadAndDisplayCustomButtons() {
-        if (overlayViewManager == null) return;
-        overlayViewManager.displayCustomButtons(currentConfigs != null ? currentConfigs : new ArrayList<>());
+        notificationCreator.createNotificationChannel("가상 컨트롤러 서비스", "서비스 실행 알림");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && intent.getAction() != null) {
-            String action = intent.getAction();
-            switch (action) {
-                case ACTION_TOGGLE_VISIBILITY:
+            switch (intent.getAction()) {
+                case ACTION_START:
+                    startForegroundService();
+                    socketIOManager.connect("http://gocam.p-e.kr:8079");
+                    showButtons();
+                    break;
+                case ACTION_STOP:
+                    stopService();
+                    break;
+                case ACTION_SHOW:
+                    showButtons();
+                    break;
+                case ACTION_HIDE:
                     if (overlayViewManager != null) {
-                        if (overlayViewManager.isOverlayVisible()) {
-                            overlayViewManager.hideOverlay();
-                        } else {
-                            overlayViewManager.showOverlay();
-                        }
+                        overlayViewManager.hideOverlay();
+                        isOverlayShown = false;
                         updateNotification();
                     }
                     break;
-                case ACTION_STOP_SERVICE:
-                    customStopService();
-                    return START_NOT_STICKY;
             }
         }
         return START_STICKY;
     }
 
-    private void customStopService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(Service.STOP_FOREGROUND_REMOVE);
-        } else {
-            stopForeground(true);
+    private void startForegroundService() {
+        startForeground(1, buildNotification());
+    }
+
+    private void showButtons() {
+        if (overlayViewManager != null) {
+            currentConfigs = buttonConfigManager.getAllButtonConfigs();
+            overlayViewManager.displayCustomButtons(currentConfigs);
+            isOverlayShown = true;
+            updateNotification();
         }
+    }
+
+    private void stopService() {
+        if (socketIOManager != null) socketIOManager.disconnect();
+        if (overlayViewManager != null) overlayViewManager.cleanup();
+        stopForeground(true);
         stopSelf();
     }
 
-    private void startServiceNotification() {
-        if (notificationCreator == null) return;
-        PendingIntent togglePendingIntent = createTogglePendingIntent();
-        PendingIntent stopPendingIntent = createStopPendingIntent();
-
-        boolean isVisible = (overlayViewManager != null) && overlayViewManager.isOverlayVisible();
-        boolean isConnected = (socketIOManager != null) && socketIOManager.isConnected();
-
-        String contentText = (isVisible ? "표시됨" : "숨겨짐") + (isConnected ? " (서버 연결됨)" : " (서버 미연결)");
-        String toggleButtonText = isVisible ? "숨기기" : "보이기";
-
-        Notification notification = notificationCreator.buildNotification("가상 컨트롤러", contentText, R.mipmap.ic_launcher,
-                togglePendingIntent, toggleButtonText, stopPendingIntent, "종료");
-        notificationCreator.startOrUpdateNotification(this, NOTIFICATION_ID, notification);
-    }
-
-    private PendingIntent createTogglePendingIntent() {
-        Intent toggleIntent = new Intent(this, OverlayService.class);
-        toggleIntent.setAction(ACTION_TOGGLE_VISIBILITY);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0);
-        return PendingIntent.getService(this, 0, toggleIntent, flags);
-    }
-
-    private PendingIntent createStopPendingIntent() {
-        Intent stopIntent = new Intent(this, OverlayService.class);
-        stopIntent.setAction(ACTION_STOP_SERVICE);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0);
-        return PendingIntent.getService(this, 1, stopIntent, flags);
-    }
-
     private void updateNotification() {
-        startServiceNotification();
+        if (notificationCreator != null) {
+            notificationCreator.startOrUpdateNotification(this, 1, buildNotification());
+        }
+    }
+
+    private Notification buildNotification() {
+        String contentText = isOverlayShown ? "표시됨" : "숨겨짐";
+        String toggleActionText = isOverlayShown ? "숨기기" : "보이기";
+        Intent toggleIntent = new Intent(this, OverlayService.class);
+        toggleIntent.setAction(isOverlayShown ? ACTION_HIDE : ACTION_SHOW);
+        PendingIntent togglePI = PendingIntent.getService(this, 1, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent stopIntent = new Intent(this, OverlayService.class);
+        stopIntent.setAction(ACTION_STOP);
+        PendingIntent stopPI = PendingIntent.getService(this, 2, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        return notificationCreator.buildNotification("가상 컨트롤러", contentText, R.mipmap.ic_launcher, togglePI, toggleActionText, stopPI, "종료");
     }
 
     @Override
     public void onEditModeChanged(EditMode newMode) {
         this.currentEditMode = newMode;
         if (overlayViewManager != null) {
-            overlayViewManager.updateButtonVisuals(newMode);
+            overlayViewManager.updateButtonVisuals();
         }
+    }
+
+    @Override
+    public void onButtonDeleted(CustomButtonConfig configToDelete) {
+        if (buttonConfigManager != null) {
+            buttonConfigManager.deleteButtonConfigByLabel(configToDelete.getLabel());
+        }
+        showButtons();
     }
 
     @Override
@@ -166,59 +151,45 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
 
     @Override
     public void onButtonUpdated(CustomButtonConfig updatedConfig) {
-        if (currentConfigs == null || buttonConfigManager == null) return;
-        for (int i = 0; i < currentConfigs.size(); i++) {
-            if (currentConfigs.get(i).getLabel().equals(updatedConfig.getLabel())) {
-                buttonConfigManager.updateButtonConfig(i, updatedConfig);
-                return;
-            }
-        }
-    }
-
-    @Override
-    public void onButtonDeleted(CustomButtonConfig configToDelete) {
-        if (currentConfigs == null || buttonConfigManager == null) return;
-        int targetIndex = -1;
-        for (int i = 0; i < currentConfigs.size(); i++) {
-            if (currentConfigs.get(i).getLabel().equals(configToDelete.getLabel())) {
-                targetIndex = i;
-                break;
-            }
-        }
-        if (targetIndex != -1) {
-            currentConfigs.remove(targetIndex);
-            buttonConfigManager.deleteButtonConfig(targetIndex);
-        }
+        // MainActivity에서 SharedPreferences를 통해 직접 수정하므로, 여기서는 새로고침만 해주면 됨
+        showButtons();
     }
 
     @Override
     public void onNewButtonRequested() {
-        if (currentConfigs == null || buttonConfigManager == null) return;
-        String newButtonLabel = "Button" + (currentConfigs.size() + 1);
+        if (buttonConfigManager == null) return;
+
+        // 새 버튼의 고유한 이름 생성
+        String newButtonLabel = "새 버튼 " + (currentConfigs.size() + 1);
+
+        // 새 버튼 설정 객체 생성
         CustomButtonConfig newConfig = new CustomButtonConfig(
-                newButtonLabel, "NEW", 0.4f, 0.4f, 0.2f, 0.1f
+                newButtonLabel,    // 버튼에 표시될 이름
+                "미지정",          // 전송될 키 값 (초기에는 없음)
+                0.4f,              // 초기 x 위치 (화면 중앙)
+                0.4f,              // 초기 y 위치 (화면 중앙)
+                0.06f,              // 너비 (화면 너비의 10%)
+                0.06f               // 높이 (화면 높이의 10%)
         );
-        currentConfigs.add(newConfig);
+
+        // 새 설정을 저장하고 화면에 다시 표시
         buttonConfigManager.addButtonConfig(newConfig);
-        loadAndDisplayCustomButtons();
+        showButtons();
     }
 
-    // onKeyAssignRequested 메소드를 하나로 합칩니다.
     @Override
     public void onKeyAssignRequested(CustomButtonConfig config) {
-        // 새로운 액티비티를 띄우기 전에, 기존에 열려있던 액티비티를 먼저 닫습니다.
         KeyCaptureActivity.finishActivity();
-
         keyCaptureListener = (originalButtonLabel, newKey) -> {
-            if (currentConfigs == null || buttonConfigManager == null) return;
+            currentConfigs = buttonConfigManager.getAllButtonConfigs();
             for (int i = 0; i < currentConfigs.size(); i++) {
-                CustomButtonConfig currentConfig = currentConfigs.get(i);
-                if (currentConfig.getLabel().equals(originalButtonLabel)) {
+                if (Objects.equals(currentConfigs.get(i).getLabel(), originalButtonLabel)) {
+                    CustomButtonConfig currentConfig = currentConfigs.get(i);
                     currentConfig.setLabel(newKey);
                     currentConfig.setKeyName(newKey);
                     buttonConfigManager.updateButtonConfig(i, currentConfig);
-                    loadAndDisplayCustomButtons();
-                    return;
+                    showButtons();
+                    break;
                 }
             }
         };
@@ -227,44 +198,17 @@ public class OverlayService extends Service implements SocketIOManager.Connectio
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
                 Intent.FLAG_ACTIVITY_MULTIPLE_TASK |
                 Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
-
         intent.putExtra(KeyCaptureActivity.EXTRA_BUTTON_LABEL, config.getLabel());
         startActivity(intent);
     }
 
-    @Override
-    public void onConnected() {
-        mainHandler.post(() -> Toast.makeText(OverlayService.this, "서버 연결 성공", Toast.LENGTH_SHORT).show());
-        updateNotification();
-    }
-
-    @Override
-    public void onDisconnected(String reason) {
-        mainHandler.post(() -> Toast.makeText(OverlayService.this, "서버 연결 끊김: " + reason, Toast.LENGTH_LONG).show());
-        updateNotification();
-    }
-
-    @Override
-    public void onError(String error) {
-        mainHandler.post(() -> Toast.makeText(OverlayService.this, "서버 오류: " + error, Toast.LENGTH_LONG).show());
-        updateNotification();
-    }
+    @Override public void onConnected() { mainHandler.post(() -> Toast.makeText(this, "서버 연결 성공", Toast.LENGTH_SHORT).show()); }
+    @Override public void onDisconnected(String reason) { mainHandler.post(() -> Toast.makeText(this, "서버 연결 끊김: " + reason, Toast.LENGTH_LONG).show()); }
+    @Override public void onError(String error) { mainHandler.post(() -> Toast.makeText(this, "서버 오류: " + error, Toast.LENGTH_LONG).show()); }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        keyCaptureListener = null;
-        if (overlayViewManager != null) {
-            overlayViewManager.cleanup();
-        }
-        if (socketIOManager != null) {
-            socketIOManager.cleanup();
-        }
-        if (keyInputHandler != null) {
-            keyInputHandler.cleanup();
-        }
-        if (mainHandler != null) {
-            mainHandler.removeCallbacksAndMessages(null);
-        }
+        stopService();
     }
 }
